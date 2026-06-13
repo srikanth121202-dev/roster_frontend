@@ -527,6 +527,19 @@ export const assignmentService = {
     return data ?? [];
   },
 
+  async getByDateRange(start: string, end: string) {
+    const { data, error } = await supabase
+      .from('route_assignments')
+      .select('employee_id, employee_name, route_number, pickup_order, pickup_location, date, shift, pickup_time, drop_time')
+      .gte('date', start)
+      .lte('date', end)
+      .order('date')
+      .order('route_number')
+      .order('pickup_order');
+    if (error) throw error;
+    return data ?? [];
+  },
+
   async getByRoute(routeNumber: string, date: string) {
     const { data: assignments, error } = await supabase
       .from('route_assignments')

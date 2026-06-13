@@ -310,18 +310,27 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
 
   const { data: weekAssignments = [] } = useQuery({
     queryKey: ['assignmentsRange', effectiveWeekDates[0], effectiveWeekDates[6]],
-    queryFn: () => assignmentService.getByDate(effectiveWeekDates[0]),
+    queryFn: () => assignmentService.getByDateRange(effectiveWeekDates[0], effectiveWeekDates[6]),
     enabled: transportMode === 'weekly',
-    select: () => undefined, // placeholder — we derive per-day below
   });
+
+  // Count of existing assignments per date for the week
+  const existingByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const a of weekAssignments) {
+      map[a.date] = (map[a.date] ?? 0) + 1;
+    }
+    return map;
+  }, [weekAssignments]);
 
   // Per-day summary for weekly mode
   const weekDaySummary = useMemo(() => effectiveWeekDates.map((date, i) => {
     const dayRecords = weekRecords.filter(r => r.date === date);
     const wfo = dayRecords.filter(r => r.status === 'WFO').length;
     const total = dayRecords.length;
-    return { date, dayLabel: DAY_LABELS[i], wfo, total, isWeekend: i >= 5 };
-  }), [weekRecords, effectiveWeekDates]);
+    const existingCount = existingByDate[date] ?? 0;
+    return { date, dayLabel: DAY_LABELS[i], wfo, total, isWeekend: i >= 5, existingCount };
+  }), [weekRecords, effectiveWeekDates, existingByDate]);
 
   const saveCapacityMutation = useMutation({
     mutationFn: (val: string) => settingsService.set('vehicle_capacity', val),
@@ -419,6 +428,7 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
     onSuccess: (results) => {
       setWeekGenResults(results);
       queryClient.invalidateQueries({ queryKey: ['assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['assignmentsRange'] });
       queryClient.invalidateQueries({ queryKey: ['routes'] });
       queryClient.invalidateQueries({ queryKey: ['roster'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
@@ -833,20 +843,54 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
                   </h3>
                   <p className="text-xs text-secondary-400 mt-0.5">
                     {weekWfoTotal} total WFO employees across {weekDaysWithWfo} day(s)
+                    {weekAssignments.length > 0 && ` · ${weekAssignments.length} assignments already on record`}
                   </p>
                 </div>
-                <button
-                  onClick={() => { setWeekGenResults(null); generateWeekMutation.mutate(); }}
-                  disabled={weekDaysWithWfo === 0 || generateWeekMutation.isPending}
-                  className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {generateWeekMutation.isPending
-                    ? <><RefreshCw className="w-4 h-4 animate-spin" /> Generating…</>
-                    : mapsOptimizable
-                      ? <><Navigation className="w-4 h-4" /> Generate Week (Maps)</>
-                      : <><CalendarDays className="w-4 h-4" /> Generate Week</>
-                  }
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {weekAssignments.length > 0 && (
+                    <button
+                      onClick={() => {
+                        import('xlsx').then(({ utils, writeFile }) => {
+                          const wb = utils.book_new();
+                          effectiveWeekDates.forEach((date, i) => {
+                            const dayAssignments = weekAssignments.filter((a: Record<string, unknown>) => a.date === date);
+                            if (dayAssignments.length === 0) return;
+                            const ws = utils.json_to_sheet(dayAssignments.map((a: Record<string, unknown>) => ({
+                              'Employee ID': a.employee_id, 'Name': a.employee_name,
+                              'Route': a.route_number, 'Shift': a.shift,
+                              'Pickup Order': a.pickup_order, 'Pickup Location': a.pickup_location,
+                              'Pickup Time': a.pickup_time, 'Drop Time': a.drop_time,
+                            })));
+                            utils.book_append_sheet(wb, ws, `${DAY_LABELS[i]} ${fmtDate(date)}`);
+                          });
+                          if (wb.SheetNames.length === 0) { toast.error('No assignment data to export'); return; }
+                          writeFile(wb, `weekly_routes_${effectiveWeekDates[0]}.xlsx`);
+                          toast.success('Weekly routes exported');
+                        });
+                      }}
+                      className="btn-secondary text-xs"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Export Week
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setWeekGenResults(null); generateWeekMutation.mutate(); }}
+                    disabled={weekDaysWithWfo === 0 || generateWeekMutation.isPending}
+                    className={cn(
+                      'btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed',
+                      weekAssignments.length > 0 && !generateWeekMutation.isPending && 'bg-warning-500 hover:bg-warning-600 border-warning-500 hover:border-warning-600',
+                    )}
+                  >
+                    {generateWeekMutation.isPending
+                      ? <><RefreshCw className="w-4 h-4 animate-spin" /> Generating…</>
+                      : weekAssignments.length > 0
+                        ? <><RefreshCw className="w-4 h-4" /> Re-generate Week</>
+                        : mapsOptimizable
+                          ? <><Navigation className="w-4 h-4" /> Generate Week (Maps)</>
+                          : <><CalendarDays className="w-4 h-4" /> Generate Week</>
+                    }
+                  </button>
+                </div>
               </div>
 
               {/* Generation progress */}
@@ -862,14 +906,17 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                   {weekDaySummary.map(day => {
                     const result = weekGenResults?.find(r => r.date === day.date);
+                    const hasExisting = day.existingCount > 0 && !weekGenResults;
                     return (
                       <div key={day.date} className={cn(
                         'rounded-xl border p-3 flex flex-col gap-1.5 transition-all',
                         day.isWeekend
                           ? 'bg-secondary-50 dark:bg-secondary-800/50 border-secondary-100 dark:border-secondary-700'
-                          : day.wfo > 0
-                            ? 'bg-white dark:bg-secondary-800 border-secondary-100 dark:border-secondary-700'
-                            : 'bg-secondary-50/50 dark:bg-secondary-800/30 border-secondary-100 dark:border-secondary-700 opacity-60'
+                          : hasExisting
+                            ? 'bg-success-50/50 dark:bg-success-900/10 border-success-100 dark:border-success-800'
+                            : day.wfo > 0
+                              ? 'bg-white dark:bg-secondary-800 border-secondary-100 dark:border-secondary-700'
+                              : 'bg-secondary-50/50 dark:bg-secondary-800/30 border-secondary-100 dark:border-secondary-700 opacity-60'
                       )}>
                         <div className="flex items-center justify-between">
                           <span className={cn(
@@ -879,6 +926,7 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
                           {result && !result.skipped && !result.error && <CheckCircle className="w-3.5 h-3.5 text-success-500" />}
                           {result?.skipped && <SkipForward className="w-3.5 h-3.5 text-secondary-400" />}
                           {result?.error && <XCircle className="w-3.5 h-3.5 text-error-500" />}
+                          {hasExisting && <CheckCircle className="w-3.5 h-3.5 text-success-400" />}
                         </div>
                         <p className="text-xs text-secondary-400">{fmtDate(day.date)}</p>
                         <div className="mt-1">
@@ -900,7 +948,12 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
                             {result.error ? 'Error' : result.skipped ? 'Skipped' : `${result.count} assigned`}
                           </div>
                         )}
-                        {day.wfo > 0 && !result && (
+                        {hasExisting && (
+                          <div className="text-xs px-2 py-0.5 rounded font-medium text-center mt-1 bg-success-50 dark:bg-success-900/20 text-success-700 dark:text-success-400">
+                            {day.existingCount} on record
+                          </div>
+                        )}
+                        {day.wfo > 0 && !result && !hasExisting && (
                           <p className="text-xs text-secondary-400 text-center mt-1">
                             ~{Math.ceil(day.wfo / vehicleCapacity)} vehicle{Math.ceil(day.wfo / vehicleCapacity) !== 1 ? 's' : ''}
                           </p>
