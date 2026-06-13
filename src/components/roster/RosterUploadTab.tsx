@@ -267,14 +267,14 @@ export default function RosterUploadTab({ selectedDate, onDateChange, onGoToTran
       if (rosterType === 'weekly') {
         // Wide format: one row per employee, 7 day-columns
         const dayHeaders = weekDates.map((d, i) => `${DAY_LABELS[i]} ${d}`);
-        const headers = ['employee_id', 'employee_name', 'team', 'tower', 'shift', ...dayHeaders];
+        const headers = ['employee_id', 'employee_name', 'team', 'shift', ...dayHeaders];
 
         const sampleEmployees = [
-          { id: 'EMP001', name: 'Arjun Sharma',   team: 'Engineering', tower: 'Tower A', shift: 'Morning'   },
-          { id: 'EMP002', name: 'Priya Reddy',     team: 'Operations',  tower: 'Tower B', shift: 'Afternoon' },
-          { id: 'EMP003', name: 'Rahul Kumar',     team: 'Engineering', tower: 'Tower A', shift: 'Morning'   },
-          { id: 'EMP004', name: 'Sneha Patel',     team: 'Finance',     tower: 'Tower C', shift: 'Night'     },
-          { id: 'EMP005', name: 'Vikram Singh',    team: 'HR',          tower: 'Tower B', shift: 'Morning'   },
+          { id: 'EMP001', name: 'Arjun Sharma',   team: 'Engineering', shift: 'Morning'   },
+          { id: 'EMP002', name: 'Priya Reddy',     team: 'Operations',  shift: 'Afternoon' },
+          { id: 'EMP003', name: 'Rahul Kumar',     team: 'Engineering', shift: 'Morning'   },
+          { id: 'EMP004', name: 'Sneha Patel',     team: 'Finance',     shift: 'Night'     },
+          { id: 'EMP005', name: 'Vikram Singh',    team: 'HR',          shift: 'Morning'   },
         ];
 
         const sampleStatuses = [
@@ -286,12 +286,12 @@ export default function RosterUploadTab({ selectedDate, onDateChange, onGoToTran
         ];
 
         const dataRows = sampleEmployees.map((e, ri) => [
-          e.id, e.name, e.team, e.tower, e.shift, ...sampleStatuses[ri],
+          e.id, e.name, e.team, e.shift, ...sampleStatuses[ri],
         ]);
 
         const ws = utils.aoa_to_sheet([headers, ...dataRows]);
         ws['!cols'] = [
-          { wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 10 },
+          { wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 10 },
           ...Array(7).fill({ wch: 16 }),
         ];
         const wb = utils.book_new();
@@ -305,7 +305,6 @@ export default function RosterUploadTab({ selectedDate, onDateChange, onGoToTran
           ['employee_id', 'Unique employee identifier', 'Yes'],
           ['employee_name', 'Full name', 'Optional'],
           ['team', 'Team / department', 'Optional'],
-          ['tower', 'Office tower', 'Optional'],
           ['shift', 'Morning / Afternoon / Night', 'Optional'],
           [`${DAY_LABELS[0]} ${weekDates[0]} … ${DAY_LABELS[6]} ${weekDates[6]}`, 'Status for each day', 'Yes'],
           [''],
@@ -329,14 +328,14 @@ export default function RosterUploadTab({ selectedDate, onDateChange, onGoToTran
       } else {
         // Daily template
         const ws = utils.aoa_to_sheet([
-          ['employee_id', 'employee_name', 'team', 'tower', 'work_date', 'shift', 'status', 'cab_used', 'pickup_required', 'drop_required', 'gender', 'manager_name', 'remarks'],
-          ['EMP001', 'Arjun Sharma',  'Engineering', 'Tower A', selectedDate, 'Morning',   'WFO',    'Yes', 'Yes', 'Yes', 'Male',   'Ramesh Kumar', ''],
-          ['EMP002', 'Priya Reddy',   'Operations',  'Tower B', selectedDate, 'Afternoon', 'WFH',    'No',  'No',  'No',  'Female', 'Sunita Rao',   ''],
-          ['EMP003', 'Rahul Kumar',   'Engineering', 'Tower A', selectedDate, 'Morning',   'Leave',  'No',  'No',  'No',  'Male',   'Ramesh Kumar', 'PL'],
-          ['EMP004', 'Sneha Patel',   'Finance',     'Tower C', selectedDate, 'Night',     'WFO',    'Yes', 'No',  'Yes', 'Female', 'Anita Sharma', ''],
-          ['EMP005', 'Vikram Singh',  'HR',          'Tower B', selectedDate, 'Morning',   'WeekOff','No',  'No',  'No',  'Male',   'Deepak Gupta', ''],
+          ['employee_id', 'employee_name', 'team', 'work_date', 'shift', 'status', 'cab_used', 'pickup_required', 'drop_required', 'gender', 'manager_name', 'remarks'],
+          ['EMP001', 'Arjun Sharma',  'Engineering', selectedDate, 'Morning',   'WFO',    'Yes', 'Yes', 'Yes', 'Male',   'Ramesh Kumar', ''],
+          ['EMP002', 'Priya Reddy',   'Operations',  selectedDate, 'Afternoon', 'WFH',    'No',  'No',  'No',  'Female', 'Sunita Rao',   ''],
+          ['EMP003', 'Rahul Kumar',   'Engineering', selectedDate, 'Morning',   'Leave',  'No',  'No',  'No',  'Male',   'Ramesh Kumar', 'PL'],
+          ['EMP004', 'Sneha Patel',   'Finance',     selectedDate, 'Night',     'WFO',    'Yes', 'No',  'Yes', 'Female', 'Anita Sharma', ''],
+          ['EMP005', 'Vikram Singh',  'HR',          selectedDate, 'Morning',   'WeekOff','No',  'No',  'No',  'Male',   'Deepak Gupta', ''],
         ]);
-        ws['!cols'] = Array(13).fill({ wch: 16 });
+        ws['!cols'] = Array(12).fill({ wch: 16 });
         const wb = utils.book_new();
         utils.book_append_sheet(wb, ws, 'Roster');
         writeFile(wb, 'roster_template_daily.xlsx');
