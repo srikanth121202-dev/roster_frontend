@@ -65,7 +65,7 @@ export default function RosterGridTab({ selectedDate }: Props) {
     const q = search.toLowerCase().trim();
     if (q) list = list.filter(r =>
       r.employee_id.toLowerCase().includes(q) || r.employee_name.toLowerCase().includes(q) ||
-      r.team.toLowerCase().includes(q) || r.tower.toLowerCase().includes(q)
+      r.team.toLowerCase().includes(q)
     );
     if (filterStatus !== 'All') list = list.filter(r => r.status === filterStatus);
     if (filterShift !== 'All') list = list.filter(r => r.shift === filterShift);
@@ -106,7 +106,7 @@ export default function RosterGridTab({ selectedDate }: Props) {
   const handleExport = () => {
     import('xlsx').then(({ utils, writeFile }) => {
       const ws = utils.json_to_sheet(filtered.map(r => ({
-        'Employee ID': r.employee_id, 'Name': r.employee_name, 'Team': r.team, 'Tower': r.tower,
+        'Employee ID': r.employee_id, 'Name': r.employee_name, 'Team': r.team,
         'Date': r.date, 'Shift': r.shift, 'Status': r.status,
         'Cab Used': r.cab_used ? 'Yes' : 'No', 'Pickup': r.pickup_required ? 'Yes' : 'No',
         'Drop': r.drop_required ? 'Yes' : 'No', 'Transport': r.transport_required ? 'Yes' : 'No',
@@ -123,7 +123,6 @@ export default function RosterGridTab({ selectedDate }: Props) {
     { key: 'employee_id', label: 'Emp ID' },
     { key: 'employee_name', label: 'Name' },
     { key: 'team', label: 'Team' },
-    { key: 'tower', label: 'Tower' },
     { key: 'shift', label: 'Shift' },
     { key: 'status', label: 'Status' },
     { key: 'cab_used', label: 'Cab' },
@@ -212,7 +211,7 @@ export default function RosterGridTab({ selectedDate }: Props) {
                 </thead>
                 <tbody className="divide-y divide-secondary-100 dark:divide-secondary-700">
                   {pageRows.length === 0 ? (
-                    <tr><td colSpan={11} className="px-4 py-14 text-center text-secondary-400">No records found for {selectedDate}.</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-14 text-center text-secondary-400">No records found for {selectedDate}.</td></tr>
                   ) : pageRows.map(r => (
                     <tr key={r.employee_id} className={cn('hover:bg-secondary-50 dark:hover:bg-secondary-700/30 transition-colors', selected.has(r.employee_id) && 'bg-primary-50/50 dark:bg-primary-900/10')}>
                       <td className="pl-4 py-3">
@@ -222,7 +221,6 @@ export default function RosterGridTab({ selectedDate }: Props) {
                       <td className="px-3 py-3 font-medium text-primary-600 dark:text-primary-400 font-mono text-xs">{r.employee_id}</td>
                       <td className="px-3 py-3 text-secondary-800 dark:text-secondary-200 font-medium">{r.employee_name}</td>
                       <td className="px-3 py-3 text-secondary-600 dark:text-secondary-300 text-xs">{r.team}</td>
-                      <td className="px-3 py-3 text-secondary-600 dark:text-secondary-300 text-xs">{r.tower}</td>
                       <td className="px-3 py-3"><span className={cn('badge text-xs', getShiftColor(r.shift))}>{r.shift}</span></td>
                       <td className="px-3 py-3"><span className={cn('badge text-xs', getStatusColor(r.status))}>{r.status}</span></td>
                       <td className="px-3 py-3 text-center">

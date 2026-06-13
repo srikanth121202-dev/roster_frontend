@@ -146,6 +146,7 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
   const { isLoaded: mapsLoaded } = useGoogleMaps();
   const [editingCapacity, setEditingCapacity] = useState(false);
   const [capacityInput, setCapacityInput] = useState('');
+  const [filterTeam, setFilterTeam] = useState('All');
 
   const { data: settings = {} } = useQuery({
     queryKey: ['settings'],
@@ -313,6 +314,14 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
   const hasRoutes = activeRoutes.length > 0;
   const alreadyGenerated = existingAssignments.length > 0;
   const totalVehicles = Math.ceil(transportEmployees.length / vehicleCapacity);
+
+  // All unique teams from WFO employees
+  const allTeams = [...new Set(transportEmployees.map(r => r.team).filter(Boolean))].sort();
+
+  // Filtered set for breakdown tables (doesn't affect KPI cards or route generation)
+  const filteredTransport = filterTeam === 'All'
+    ? transportEmployees
+    : transportEmployees.filter(r => r.team === filterTeam);
   const officeLat = parseFloat(settings.office_lat ?? '0');
   const officeLng = parseFloat(settings.office_lng ?? '0');
   const officeConfigured = !!(officeLat && officeLng);
@@ -324,14 +333,14 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
   }).length;
 
   const shiftGroups: Record<string, typeof transportEmployees> = {};
-  for (const r of transportEmployees) {
+  for (const r of filteredTransport) {
     const s = r.shift ?? 'Morning';
     if (!shiftGroups[s]) shiftGroups[s] = [];
     shiftGroups[s].push(r);
   }
 
   const teamGroups: Record<string, number> = {};
-  for (const r of transportEmployees) {
+  for (const r of filteredTransport) {
     if (r.team) teamGroups[r.team] = (teamGroups[r.team] ?? 0) + 1;
   }
   const teamRows = Object.entries(teamGroups).sort((a, b) => b[1] - a[1]);
@@ -358,7 +367,7 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
       utils.book_append_sheet(wb, summary, 'Transport Summary');
       utils.book_append_sheet(wb, utils.json_to_sheet(transportEmployees.map(r => ({
         'Employee ID': r.employee_id, 'Name': r.employee_name, 'Team': r.team,
-        'Tower': r.tower, 'Shift': r.shift, 'Cab Used': r.cab_used ? 'Yes' : 'No',
+        'Shift': r.shift, 'Cab Used': r.cab_used ? 'Yes' : 'No',
         'Pickup Required': r.pickup_required ? 'Yes' : 'No', 'Drop Required': r.drop_required ? 'Yes' : 'No',
       }))), 'Transport Detail');
       writeFile(wb, `transport_requirement_${selectedDate}.xlsx`);
@@ -555,7 +564,33 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
           <div className="w-7 h-7 border-[3px] border-primary-200 border-t-primary-600 rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          {/* Team filter for breakdown tables */}
+          {allTeams.length > 0 && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-xs font-medium text-secondary-500 dark:text-secondary-400 whitespace-nowrap">Filter Breakdowns by Team</label>
+              <select
+                value={filterTeam}
+                onChange={e => setFilterTeam(e.target.value)}
+                className="input-field w-auto"
+              >
+                <option value="All">All Teams</option>
+                {allTeams.map(t => <option key={t}>{t}</option>)}
+              </select>
+              {filterTeam !== 'All' && (
+                <button onClick={() => setFilterTeam('All')} className="text-xs text-primary-600 dark:text-primary-400 hover:underline">
+                  Clear
+                </button>
+              )}
+              {filterTeam !== 'All' && (
+                <span className="text-xs bg-primary-100 dark:bg-primary-800/40 text-primary-700 dark:text-primary-300 px-2.5 py-1 rounded-full font-medium">
+                  {filteredTransport.length} of {transportEmployees.length} WFO
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Shift breakdown */}
           <div className="bg-white dark:bg-secondary-800 rounded-xl border border-secondary-100 dark:border-secondary-700 overflow-hidden shadow-sm">
             <div className="p-4 border-b border-secondary-100 dark:border-secondary-700">
@@ -645,6 +680,7 @@ export default function RosterTransportTab({ selectedDate, onNavigate }: Props) 
             </div>
           </div>
         </div>
+      </div>
       )}
 
       <div className="p-4 bg-secondary-50 dark:bg-secondary-800/50 rounded-xl border border-secondary-100 dark:border-secondary-700">

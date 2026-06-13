@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { rosterService } from '../../services';
@@ -34,6 +34,7 @@ interface Props { selectedDate: string; }
 export default function RosterCalendarTab({ selectedDate }: Props) {
   const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(new Date(selectedDate)));
   const [page, setPage] = useState(1);
+  const [filterTeam, setFilterTeam] = useState('All');
 
   const weekEnd = addDays(weekStart, 6);
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -44,8 +45,17 @@ export default function RosterCalendarTab({ selectedDate }: Props) {
   });
 
   // Build employee list from records
-  const employees = [...new Map(records.map(r => [r.employee_id, { id: r.employee_id, name: r.employee_name, team: r.team }])).values()]
-    .sort((a, b) => a.id.localeCompare(b.id));
+  const allTeams = useMemo(
+    () => [...new Set(records.map(r => r.team).filter(Boolean))].sort(),
+    [records],
+  );
+
+  const employees = useMemo(
+    () => [...new Map(records.map(r => [r.employee_id, { id: r.employee_id, name: r.employee_name, team: r.team }])).values()]
+      .filter(e => filterTeam === 'All' || e.team === filterTeam)
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    [records, filterTeam],
+  );
 
   const totalPages = Math.max(1, Math.ceil(employees.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -66,6 +76,25 @@ export default function RosterCalendarTab({ selectedDate }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Team filter */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="text-xs font-medium text-secondary-500 dark:text-secondary-400 whitespace-nowrap">Team</label>
+        <select
+          value={filterTeam}
+          onChange={e => { setFilterTeam(e.target.value); setPage(1); }}
+          className="input-field w-auto"
+          disabled={allTeams.length === 0}
+        >
+          <option value="All">All Teams</option>
+          {allTeams.map(t => <option key={t}>{t}</option>)}
+        </select>
+        {filterTeam !== 'All' && (
+          <button onClick={() => { setFilterTeam('All'); setPage(1); }} className="text-xs text-primary-600 dark:text-primary-400 hover:underline">
+            Clear
+          </button>
+        )}
+      </div>
+
       {/* Week navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -76,7 +105,10 @@ export default function RosterCalendarTab({ selectedDate }: Props) {
           <button onClick={nextWeek} className="btn-secondary p-2"><ChevronRight className="w-4 h-4" /></button>
           <button onClick={goToday} className="btn-secondary text-sm">Today</button>
         </div>
-        <span className="text-sm text-secondary-500 dark:text-secondary-400">{employees.length} employees</span>
+        <span className="text-sm text-secondary-500 dark:text-secondary-400">
+          {employees.length} employee{employees.length !== 1 ? 's' : ''}
+          {filterTeam !== 'All' ? ` · ${filterTeam}` : ''}
+        </span>
       </div>
 
       {/* Legend */}
