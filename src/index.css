@@ -1,0 +1,145 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sidebar-width: 260px;
+    --sidebar-collapsed-width: 72px;
+    --navbar-height: 64px;
+  }
+
+  * {
+    @apply border-secondary-200;
+  }
+
+  body {
+    @apply font-sans antialiased bg-secondary-50 text-secondary-900;
+  }
+
+  .dark body {
+    @apply bg-secondary-950 text-secondary-100;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/80 dark:bg-secondary-800/80 backdrop-blur-sm border border-white/20 dark:border-secondary-700/50 rounded-xl shadow-glass;
+  }
+
+  .kpi-card {
+    @apply bg-white dark:bg-secondary-800 rounded-xl border border-secondary-100 dark:border-secondary-700 shadow-sm hover:shadow-card-hover transition-all duration-300 p-6;
+  }
+
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary-100 hover:bg-secondary-200 dark:bg-secondary-700 dark:hover:bg-secondary-600 text-secondary-700 dark:text-secondary-200 font-medium px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2;
+  }
+
+  .btn-danger {
+    @apply bg-error-500 hover:bg-error-600 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 rounded-lg border border-secondary-200 dark:border-secondary-600 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 placeholder-secondary-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-sm;
+  }
+
+  .label-field {
+    @apply block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-1.5;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-secondary-900 dark:text-white;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-secondary-500 dark:text-secondary-400 mt-1;
+  }
+
+  .table-header {
+    @apply bg-secondary-50 dark:bg-secondary-800 text-secondary-600 dark:text-secondary-400 text-xs font-semibold uppercase tracking-wider;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-secondary-600 dark:text-secondary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 hover:text-primary-700 dark:hover:text-primary-400 transition-all duration-200 cursor-pointer text-sm font-medium;
+  }
+
+  .sidebar-item-active {
+    @apply bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-semibold;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4;
+  }
+
+  .modal-content {
+    @apply bg-white dark:bg-secondary-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto;
+  }
+}
+
+/* AG Grid Theme Override */
+.ag-theme-alpine {
+  --ag-border-color: theme('colors.secondary.200');
+  --ag-header-background-color: theme('colors.secondary.50');
+  --ag-odd-row-background-color: theme('colors.white');
+  --ag-row-hover-color: theme('colors.primary.50');
+  --ag-selected-row-background-color: theme('colors.primary.100');
+  --ag-font-family: 'Inter', sans-serif;
+  --ag-font-size: 13px;
+}
+
+.dark .ag-theme-alpine {
+  --ag-background-color: theme('colors.secondary.800');
+  --ag-header-background-color: theme('colors.secondary.900');
+  --ag-border-color: theme('colors.secondary.700');
+  --ag-odd-row-background-color: theme('colors.secondary.800');
+  --ag-row-hover-color: theme('colors.secondary.700');
+  --ag-foreground-color: theme('colors.secondary.100');
+  --ag-header-foreground-color: theme('colors.secondary.300');
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-secondary-100 dark:bg-secondary-800;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-secondary-300 dark:bg-secondary-600 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-secondary-400 dark:bg-secondary-500;
+}
+
+/* Recharts responsive */
+.recharts-responsive-container {
+  min-height: 0;
+}
+
+/* Loading skeleton */
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.dark .skeleton {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200px 100%;
+}
