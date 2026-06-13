@@ -577,8 +577,13 @@ export const assignmentService = {
   },
 
   async generate(date: string): Promise<number> {
-    // 1. Use roster_records as the source of truth so assignments work even when
-    //    employees haven't been synced into the employees master table.
+    // Read vehicle capacity from settings
+    const { data: settingsRows } = await supabase.from('settings').select('key, value');
+    const cfg = Object.fromEntries((settingsRows ?? []).map(s => [s.key, s.value]));
+    const vehicleCapacity = Math.max(1, parseInt(cfg.vehicle_capacity ?? '6', 10) || 6);
+    const vehicleType = cfg.default_vehicle_type ?? 'Bus';
+
+    // 1. WFO employees from roster
     const { data: rosterRows } = await supabase
       .from('roster_records')
       .select('employee_id, employee_name, shift, tower, team')
@@ -588,7 +593,7 @@ export const assignmentService = {
     if (!rosterRows || rosterRows.length === 0)
       throw new Error(`No WFO employees found in roster for ${date}. Upload a roster file with at least one employee marked as WFO.`);
 
-    // 2. Optionally enrich with employees table for location data (best-effort).
+    // 2. Enrich with employees table for location data (best-effort)
     const empIds = rosterRows.map(r => r.employee_id);
     const { data: empDetails } = await supabase
       .from('employees')
@@ -596,17 +601,7 @@ export const assignmentService = {
       .in('employee_id', empIds);
     const empMap = Object.fromEntries((empDetails ?? []).map(e => [e.employee_id, e]));
 
-    // 3. Get active routes.
-    const { data: routeRows } = await supabase
-      .from('routes')
-      .select('*')
-      .eq('status', 'Active')
-      .order('route_number');
-
-    if (!routeRows || routeRows.length === 0)
-      throw new Error('No active routes configured. Go to Route Master → Add Route and create at least one Active route, then generate again.');
-
-    // 4. Group by shift using roster shift, falling back to employees table then 'Morning'.
+    // 3. Group by shift
     const shiftGroups: Record<string, Array<{ employee_id: string; name: string; location: string }>> = {};
     for (const r of rosterRows) {
       const shift = r.shift ?? empMap[r.employee_id]?.shift ?? 'Morning';
@@ -618,50 +613,55 @@ export const assignmentService = {
       });
     }
 
-    // 5. Round-robin assignment per shift.
-    //    Prefer shift-matched routes; if none match fall back to all active routes.
-    const assignments = [];
+    // 4. Delete existing assignments for this date (ensures capacity is never exceeded
+    //    by stale records from a previous generation run)
+    const { error: delErr } = await supabase.from('route_assignments').delete().eq('date', date);
+    if (delErr) throw delErr;
+
+    // 5. Assign using capacity-based chunks (never exceeds vehicleCapacity per route)
+    const allAssignments: Record<string, unknown>[] = [];
     for (const [shift, shiftEmps] of Object.entries(shiftGroups)) {
-      const matched = routeRows.filter(r => r.shift === shift);
-      const pool = matched.length > 0 ? matched : routeRows;
-      const orderCounters: Record<string, number> = {};
-      for (let i = 0; i < shiftEmps.length; i++) {
-        const emp = shiftEmps[i];
-        const route = pool[i % pool.length];
-        if (!orderCounters[route.route_number]) orderCounters[route.route_number] = 1;
-        assignments.push({
-          employee_id: emp.employee_id,
-          employee_name: emp.name,
-          route_number: route.route_number,
-          pickup_order: orderCounters[route.route_number]++,
-          pickup_location: emp.location,
-          drop_location: emp.location,
-          date,
-          shift,
-          pickup_time: shift === 'Morning' ? '07:30 AM' : shift === 'Afternoon' ? '01:30 PM' : '09:30 PM',
-          drop_time: shift === 'Morning' ? '09:30 PM' : shift === 'Afternoon' ? '10:30 PM' : '06:30 AM',
+      const needed = Math.ceil(shiftEmps.length / vehicleCapacity);
+      const routes = await routeService.getOrCreateForShift(shift, needed, vehicleCapacity, vehicleType);
+
+      const chunks: typeof shiftEmps[] = [];
+      for (let i = 0; i < shiftEmps.length; i += vehicleCapacity) chunks.push(shiftEmps.slice(i, i + vehicleCapacity));
+
+      for (let i = 0; i < chunks.length; i++) {
+        const route = routes[i];
+        chunks[i].forEach((emp, j) => {
+          allAssignments.push({
+            employee_id: emp.employee_id,
+            employee_name: emp.name,
+            route_number: route.route_number,
+            pickup_order: j + 1,
+            pickup_location: emp.location,
+            drop_location: emp.location,
+            date,
+            shift,
+            pickup_time: shift === 'Morning' ? '07:30 AM' : shift === 'Afternoon' ? '01:30 PM' : '09:30 PM',
+            drop_time:   shift === 'Morning' ? '09:30 PM' : shift === 'Afternoon' ? '10:30 PM' : '06:30 AM',
+          });
         });
       }
     }
 
-    if (assignments.length === 0)
+    if (allAssignments.length === 0)
       throw new Error('No assignments could be built. Ensure WFO employees exist in the roster and active routes are configured.');
 
-    const { error } = await supabase
-      .from('route_assignments')
-      .upsert(assignments, { onConflict: 'employee_id,date,shift' });
+    const { error } = await supabase.from('route_assignments').insert(allAssignments);
     if (error) throw error;
 
-    // Update assigned_employee counts per route
+    // 6. Update assigned_employee counts per route
     const routeCounts: Record<string, number> = {};
-    for (const a of assignments) routeCounts[a.route_number] = (routeCounts[a.route_number] ?? 0) + 1;
+    for (const a of allAssignments) routeCounts[a.route_number as string] = (routeCounts[a.route_number as string] ?? 0) + 1;
     await Promise.all(
       Object.entries(routeCounts).map(([rn, cnt]) =>
         supabase.from('routes').update({ assigned_employees: cnt }).eq('route_number', rn)
       )
     );
 
-    return assignments.length;
+    return allAssignments.length;
   },
 };
 

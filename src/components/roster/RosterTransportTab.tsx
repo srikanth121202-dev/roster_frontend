@@ -159,6 +159,15 @@ async function buildAssignmentsForDate(
     for (let i = 0; i < chunks.length; i++) {
       const route = routes[i];
       const chunk = chunks[i];
+
+      // Explicit capacity guard — chunk size must never exceed the declared limit
+      if (chunk.length > vehicleCapacity) {
+        throw new Error(
+          `Capacity violation: route ${route.route_number} would have ${chunk.length} employees but capacity is ${vehicleCapacity}. ` +
+          `Reduce employee count or increase vehicle capacity.`
+        );
+      }
+
       const hasAllCoords = chunk.every(e => e.lat && e.lng);
       const canUseApi = mapsLoaded && hasAllCoords && !!(settings.google_api_key) && officeLat && officeLng;
 
@@ -200,9 +209,18 @@ async function buildAssignmentsForDate(
 }
 
 async function saveAssignments(assignments: Record<string, unknown>[]) {
-  const { error } = await supabase
-    .from('route_assignments')
-    .upsert(assignments, { onConflict: 'employee_id,date,shift' });
+  if (assignments.length === 0) return;
+
+  // Delete all existing assignments for every date in this batch first.
+  // This ensures a clean slate — no stale records from previous runs that
+  // could push a route over its declared capacity.
+  const dates = [...new Set(assignments.map(a => a.date as string))];
+  for (const date of dates) {
+    const { error: delErr } = await supabase.from('route_assignments').delete().eq('date', date);
+    if (delErr) throw delErr;
+  }
+
+  const { error } = await supabase.from('route_assignments').insert(assignments);
   if (error) throw error;
 
   const routeCounts: Record<string, number> = {};
